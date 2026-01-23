@@ -1,10 +1,10 @@
 # Claude Annotator Plugin
 
-Claude Code plugin for InstantCode Annotator - enables AI-human collaboration through visual element selection and annotation.
+Claude Code plugin for vite-plugin-ai-annotator - enables AI-human collaboration through visual element selection and annotation.
 
 ## Overview
 
-This plugin provides Claude Code with knowledge about InstantCode Annotator, a tool that bridges the gap between AI assistants and web development by allowing:
+This plugin provides Claude Code with knowledge about AI Annotator, a tool that bridges the gap between AI assistants and web development by allowing:
 
 - Visual element selection in the browser
 - Adding comments/annotations to selected elements
@@ -14,47 +14,30 @@ This plugin provides Claude Code with knowledge about InstantCode Annotator, a t
 
 ## Installation
 
-### Prerequisites
-
-1. **InstantCode package** installed in your project:
-   ```bash
-   bun add instantcode
-   # or
-   npm install instantcode
-   ```
-
-2. **MCP server** configured in Claude Code settings
-
 ### Install the Plugin
 
-**Option 1: From GitHub (recommended)**
-
 In Claude Code, run:
-```
-/plugin marketplace add nguyenvanduocit/claude-annotator-plugin
+
+```bash
+claude plugin install claude-annotator-plugin@nguyenvanduocit
 ```
 
-Then install:
-```
-/plugin install claude-annotator-plugin@nguyenvanduocit
-```
+Then ask Claude: *"Set up ai-annotator for my project"* - it will handle everything!
 
-**Option 2: Development/Testing**
+### Alternative Installation Methods
 
-Load directly without installation:
+**Development/Testing:**
 ```bash
 claude --plugin-dir /path/to/claude-annotator-plugin
 ```
 
-**Option 3: Clone and load**
-
+**Clone and load:**
 ```bash
 git clone https://github.com/nguyenvanduocit/claude-annotator-plugin.git
 claude --plugin-dir ./claude-annotator-plugin
 ```
 
-**Installation Scopes**
-
+**Installation Scopes:**
 ```bash
 # User scope (default) - available across all projects
 claude plugin install claude-annotator-plugin@nguyenvanduocit --scope user
@@ -63,20 +46,27 @@ claude plugin install claude-annotator-plugin@nguyenvanduocit --scope user
 claude plugin install claude-annotator-plugin@nguyenvanduocit --scope project
 ```
 
-## Features
+## What the Plugin Does
+
+When you ask Claude to set up ai-annotator, it will:
+
+1. Install `vite-plugin-ai-annotator` in your project
+2. Configure your `vite.config.ts`
+3. Set up the MCP server connection
+4. Guide you through using all features
 
 ### Skill: annotator
 
 The `annotator` skill provides comprehensive guidance on:
 
-- Setting up InstantCode in your project
+- Setting up AI Annotator in your project
 - Configuring the MCP server
 - Using all available MCP tools
 - Best practices for AI-human collaboration
 
 **Trigger phrases:**
+- "Set up ai-annotator"
 - "How do I use annotator?"
-- "Set up InstantCode"
 - "Select elements in browser"
 - "Capture screenshot from browser"
 
