@@ -27,15 +27,41 @@ This plugin provides Claude Code with knowledge about InstantCode Annotator, a t
 
 ### Install the Plugin
 
-```bash
-# Clone the plugin
-git clone https://github.com/anthropics/claude-annotator-plugin.git
+**Option 1: From GitHub (recommended)**
 
-# Use with Claude Code
+In Claude Code, run:
+```
+/plugin marketplace add nguyenvanduocit/claude-annotator-plugin
+```
+
+Then install:
+```
+/plugin install claude-annotator-plugin@nguyenvanduocit
+```
+
+**Option 2: Development/Testing**
+
+Load directly without installation:
+```bash
 claude --plugin-dir /path/to/claude-annotator-plugin
 ```
 
-Or add to your project's `.claude/plugins/` directory.
+**Option 3: Clone and load**
+
+```bash
+git clone https://github.com/nguyenvanduocit/claude-annotator-plugin.git
+claude --plugin-dir ./claude-annotator-plugin
+```
+
+**Installation Scopes**
+
+```bash
+# User scope (default) - available across all projects
+claude plugin install claude-annotator-plugin@nguyenvanduocit --scope user
+
+# Project scope - shared with team via version control
+claude plugin install claude-annotator-plugin@nguyenvanduocit --scope project
+```
 
 ## Features
 
