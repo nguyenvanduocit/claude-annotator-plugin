@@ -1,6 +1,9 @@
 # Claude Annotator Plugin
 
-Claude Code plugin for vite-plugin-ai-annotator - enables AI-human collaboration through visual element selection and annotation.
+Claude Code plugin for [vite-plugin-ai-annotator](https://www.npmjs.com/package/vite-plugin-ai-annotator) - enables AI-human collaboration through visual element selection and annotation.
+
+[![Watch the Tutorial](https://img.youtube.com/vi/OuKnfCbmfTg/maxresdefault.jpg)](https://youtu.be/OuKnfCbmfTg)
+> [Watch the Tutorial Video](https://youtu.be/OuKnfCbmfTg) - See the plugin in action!
 
 ## Overview
 
@@ -50,10 +53,17 @@ claude plugin install claude-annotator-plugin@nguyenvanduocit --scope project
 
 When you ask Claude to set up ai-annotator, it will:
 
-1. Install `vite-plugin-ai-annotator` in your project
-2. Configure your `vite.config.ts`
-3. Set up the MCP server connection
+1. Install `vite-plugin-ai-annotator` as a dev dependency
+2. Configure your `vite.config.ts` with the annotator plugin
+3. Set up the MCP server connection in Claude Code settings
 4. Guide you through using all features
+
+**Framework Support:**
+- React - Detects components, props, and state
+- Vue - Understands composition/options API
+- Angular - Recognizes components and directives
+- Svelte - Identifies components and stores
+- Vanilla JS - Works with plain HTML/CSS/JS
 
 ### Skill: annotator
 

@@ -1,17 +1,17 @@
 ---
 name: annotator
-description: Guide for using InstantCode Annotator to enable AI-human collaboration through visual element selection. Use when user mentions "annotator", "InstantCode", "select elements", "browser selection", "capture screenshot from browser", "inject CSS/JS", or needs to work with web elements visually.
+description: Guide for using vite-plugin-ai-annotator to enable AI-human collaboration through visual element selection. Use when user mentions "annotator", "ai-annotator", "vite-plugin-ai-annotator", "select elements", "browser selection", "capture screenshot from browser", "inject CSS/JS", or needs to work with web elements visually.
 ---
 
-# InstantCode Annotator
+# vite-plugin-ai-annotator
 
-InstantCode Annotator enables real-time collaboration between AI and humans by allowing visual element selection, annotation, and manipulation in the browser.
+AI-powered element annotator for Vite - enables real-time collaboration between AI and humans through visual element selection, annotation, and manipulation in the browser.
 
 ## Architecture
 
 ```
 ┌─────────────────┐     WebSocket      ┌──────────────────┐
-│  Browser Page   │◄──────────────────►│  InstantCode     │
+│  Browser Page   │◄──────────────────►│  Annotator       │
 │  (Toolbar UI)   │                    │  Server (:7318)  │
 └─────────────────┘                    └────────┬─────────┘
                                                 │
@@ -25,10 +25,10 @@ InstantCode Annotator enables real-time collaboration between AI and humans by a
 
 ## Setup
 
-### 1. Install InstantCode
+### 1. Install vite-plugin-ai-annotator
 
 ```bash
-bun add instantcode
+bun add -d vite-plugin-ai-annotator
 ```
 
 ### 2. Add Vite Plugin
@@ -36,15 +36,24 @@ bun add instantcode
 ```typescript
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { annotatorPlugin } from 'instantcode/vite-plugin'
+import annotator from 'vite-plugin-ai-annotator'
 
 export default defineConfig({
   plugins: [
-    annotatorPlugin({
+    annotator({
       port: 7318,           // Default port
       verbose: false,       // Enable for debugging
     }),
   ],
+})
+```
+
+**Team Collaboration (optional):** For network access, add:
+```typescript
+annotator({
+  port: 7318,
+  listenAddress: '0.0.0.0',                // Accept connections from network
+  publicAddress: 'https://myapp.com:7318', // Public URL for the toolbar
 })
 ```
 
@@ -237,6 +246,7 @@ interface ElementData {
   cssSelector: string
   textContent: string
   attributes: Record<string, string>
+  imagePath?: string  // Screenshot path if captured
   comment?: string  // User annotation
   computedStyles?: {
     width: number
