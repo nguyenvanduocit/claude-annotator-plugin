@@ -85,7 +85,6 @@ The `annotator` skill provides comprehensive guidance on:
 | Tool | Description |
 |------|-------------|
 | `annotator_list_sessions` | List connected browser sessions |
-| `annotator_set_active_session` | Set active browser session |
 | `annotator_get_page_context` | Get current page URL, title, selection count |
 | `annotator_select_element` | Enter inspect mode or select by CSS/XPath |
 | `annotator_get_selected_elements` | Get data about selected elements |
@@ -94,6 +93,8 @@ The `annotator` skill provides comprehensive guidance on:
 | `annotator_inject_css` | Inject CSS styles into page |
 | `annotator_inject_js` | Execute JavaScript in page context |
 | `annotator_get_console` | Get captured console logs |
+
+Note: All tools (except `annotator_list_sessions`) accept an optional `sessionId` parameter. If only one browser is connected, it auto-selects.
 
 ## License
 

@@ -81,15 +81,7 @@ List all connected browser sessions.
 Use: When multiple browser tabs are connected and you need to see which sessions are available.
 ```
 
-**annotator_set_active_session**
-Set which browser session to interact with.
-
-```
-Parameters:
-- sessionId: string - The session ID to activate
-
-Use: When working with multiple browser sessions and need to switch context.
-```
+Note: The MCP server is **stateless** - there's no "active session" concept. Each tool accepts an optional `sessionId` parameter. If only one browser session is connected, it auto-selects. If multiple sessions exist, you must pass `sessionId` to each tool call.
 
 ### Page Context
 
@@ -97,6 +89,9 @@ Use: When working with multiple browser sessions and need to switch context.
 Get current page information.
 
 ```
+Parameters:
+- sessionId: (optional) Browser session ID
+
 Returns:
 - url: Current page URL
 - title: Page title
@@ -113,7 +108,8 @@ Enter inspect mode or select elements by selector.
 
 ```
 Parameters:
-- mode: 'inspect' | 'selector'
+- sessionId: (optional) Browser session ID
+- mode: 'inspect' | 'selector' (default: 'inspect')
 - selector: CSS or XPath selector (required when mode is 'selector')
 - selectorType: 'css' | 'xpath' (default: 'css')
 
@@ -127,6 +123,9 @@ Examples:
 Get detailed data about selected elements.
 
 ```
+Parameters:
+- sessionId: (optional) Browser session ID
+
 Returns array of ElementData:
 - index: Selection order
 - tagName: HTML tag
@@ -143,6 +142,11 @@ Returns array of ElementData:
 **annotator_clear_selection**
 Clear all selected elements.
 
+```
+Parameters:
+- sessionId: (optional) Browser session ID
+```
+
 ### Screenshots
 
 **annotator_capture_screenshot**
@@ -150,7 +154,8 @@ Capture viewport or specific element.
 
 ```
 Parameters:
-- type: 'viewport' | 'element'
+- sessionId: (optional) Browser session ID
+- type: 'viewport' | 'element' (default: 'viewport')
 - selector: CSS selector (required when type is 'element')
 - format: 'png' | 'jpeg' (default: 'png')
 - quality: 0-1 (default: 0.8)
@@ -165,6 +170,7 @@ Inject CSS styles into the page.
 
 ```
 Parameters:
+- sessionId: (optional) Browser session ID
 - css: CSS code to inject
 
 Use: Testing style changes, debugging layout issues.
@@ -175,6 +181,7 @@ Execute JavaScript in page context.
 
 ```
 Parameters:
+- sessionId: (optional) Browser session ID
 - code: JavaScript code to execute
 
 Returns: Execution result or error
@@ -189,6 +196,7 @@ Get captured console logs from the browser.
 
 ```
 Parameters:
+- sessionId: (optional) Browser session ID
 - clear: boolean - Clear buffer after reading (default: false)
 
 Returns: Array of console entries with type, args, timestamp.
