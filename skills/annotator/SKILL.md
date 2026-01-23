@@ -1,0 +1,259 @@
+---
+name: annotator
+description: Guide for using InstantCode Annotator to enable AI-human collaboration through visual element selection. Use when user mentions "annotator", "InstantCode", "select elements", "browser selection", "capture screenshot from browser", "inject CSS/JS", or needs to work with web elements visually.
+---
+
+# InstantCode Annotator
+
+InstantCode Annotator enables real-time collaboration between AI and humans by allowing visual element selection, annotation, and manipulation in the browser.
+
+## Architecture
+
+```
+┌─────────────────┐     WebSocket      ┌──────────────────┐
+│  Browser Page   │◄──────────────────►│  InstantCode     │
+│  (Toolbar UI)   │                    │  Server (:7318)  │
+└─────────────────┘                    └────────┬─────────┘
+                                                │
+                                           MCP Protocol
+                                                │
+                                       ┌────────▼─────────┐
+                                       │   Claude Code    │
+                                       │   (MCP Client)   │
+                                       └──────────────────┘
+```
+
+## Setup
+
+### 1. Install InstantCode
+
+```bash
+bun add instantcode
+```
+
+### 2. Add Vite Plugin
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { annotatorPlugin } from 'instantcode/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    annotatorPlugin({
+      port: 7318,           // Default port
+      verbose: false,       // Enable for debugging
+    }),
+  ],
+})
+```
+
+### 3. Configure MCP Server
+
+Add to Claude Code settings (`~/.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "instantcode": {
+      "url": "http://localhost:7318/mcp"
+    }
+  }
+}
+```
+
+### 4. Start Development Server
+
+```bash
+bun dev
+```
+
+The annotator toolbar appears in the bottom-right corner of your app.
+
+## MCP Tools
+
+### Session Management
+
+**annotator_list_sessions**
+List all connected browser sessions.
+
+```
+Use: When multiple browser tabs are connected and you need to see which sessions are available.
+```
+
+**annotator_set_active_session**
+Set which browser session to interact with.
+
+```
+Parameters:
+- sessionId: string - The session ID to activate
+
+Use: When working with multiple browser sessions and need to switch context.
+```
+
+### Page Context
+
+**annotator_get_page_context**
+Get current page information.
+
+```
+Returns:
+- url: Current page URL
+- title: Page title
+- selectionCount: Number of selected elements
+- isInspecting: Whether inspect mode is active
+
+Use: Before selecting elements, to understand current page state.
+```
+
+### Element Selection
+
+**annotator_select_element**
+Enter inspect mode or select elements by selector.
+
+```
+Parameters:
+- mode: 'inspect' | 'selector'
+- selector: CSS or XPath selector (required when mode is 'selector')
+- selectorType: 'css' | 'xpath' (default: 'css')
+
+Examples:
+- Inspect mode: { mode: 'inspect' }
+- CSS selector: { mode: 'selector', selector: '.btn-primary' }
+- XPath: { mode: 'selector', selector: '//button[@type="submit"]', selectorType: 'xpath' }
+```
+
+**annotator_get_selected_elements**
+Get detailed data about selected elements.
+
+```
+Returns array of ElementData:
+- index: Selection order
+- tagName: HTML tag
+- xpath: Full XPath
+- cssSelector: CSS selector
+- textContent: Element text
+- attributes: All attributes
+- comment: User annotation (if any)
+- computedStyles: Width, height, colors, fonts
+- componentData: Framework component info (Vue, React, etc.)
+- children: Nested selected elements
+```
+
+**annotator_clear_selection**
+Clear all selected elements.
+
+### Screenshots
+
+**annotator_capture_screenshot**
+Capture viewport or specific element.
+
+```
+Parameters:
+- type: 'viewport' | 'element'
+- selector: CSS selector (required when type is 'element')
+- format: 'png' | 'jpeg' (default: 'png')
+- quality: 0-1 (default: 0.8)
+
+Returns: File path to saved screenshot
+```
+
+### Code Injection
+
+**annotator_inject_css**
+Inject CSS styles into the page.
+
+```
+Parameters:
+- css: CSS code to inject
+
+Use: Testing style changes, debugging layout issues.
+```
+
+**annotator_inject_js**
+Execute JavaScript in page context.
+
+```
+Parameters:
+- code: JavaScript code to execute
+
+Returns: Execution result or error
+
+Use: Testing interactions, reading page state, debugging.
+```
+
+### Console
+
+**annotator_get_console**
+Get captured console logs from the browser.
+
+```
+Parameters:
+- clear: boolean - Clear buffer after reading (default: false)
+
+Returns: Array of console entries with type, args, timestamp.
+```
+
+## Workflows
+
+### Workflow 1: Understand Page Structure
+
+1. Check page context: `annotator_get_page_context`
+2. Enter inspect mode: `annotator_select_element({ mode: 'inspect' })`
+3. Ask user to click elements they want to discuss
+4. Get selected elements: `annotator_get_selected_elements`
+5. Analyze structure and provide recommendations
+
+### Workflow 2: Debug Styling Issues
+
+1. Select problematic element: `annotator_select_element({ mode: 'selector', selector: '.problem-element' })`
+2. Get element details including computedStyles
+3. Inject test CSS: `annotator_inject_css('...')`
+4. Capture screenshot to verify: `annotator_capture_screenshot({ type: 'element', selector: '.problem-element' })`
+
+### Workflow 3: Implement User Feedback
+
+1. User selects elements and adds comments via toolbar
+2. Get selections with comments: `annotator_get_selected_elements`
+3. Read component files based on `componentData.componentLocation`
+4. Make code changes based on user comments
+5. User verifies changes in browser
+
+## Element Data Structure
+
+```typescript
+interface ElementData {
+  index: number
+  tagName: string
+  xpath: string
+  cssSelector: string
+  textContent: string
+  attributes: Record<string, string>
+  comment?: string  // User annotation
+  computedStyles?: {
+    width: number
+    height: number
+    fontSize: string
+    fontFamily: string
+    color?: string
+    backgroundColor?: string
+    display?: string
+    position?: string
+  }
+  componentData?: {
+    componentLocation: string  // File path
+    componentName?: string
+    framework?: 'vue' | 'react' | 'angular' | 'svelte' | 'vanilla'
+  }
+  children: ElementData[]
+}
+```
+
+## Tips
+
+- Always call `annotator_get_page_context` first to verify connection
+- Use inspect mode for user-driven selection, CSS/XPath for programmatic selection
+- Element comments from users provide valuable context for code changes
+- `componentData.componentLocation` points directly to the source file
+- Screenshots are saved to temp directory and path is returned
+- Console logs are buffered; use `clear: true` to prevent duplicates

@@ -1,0 +1,9 @@
+{
+  "name": "claude-annotator-plugin",
+  "version": "1.0.0",
+  "description": "Claude Code plugin for InstantCode Annotator - enables AI-human collaboration through visual element selection and annotation",
+  "author": {
+    "name": "InstantCode",
+    "email": "contact@instantcode.dev"
+  }
+}
