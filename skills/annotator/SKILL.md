@@ -15,7 +15,7 @@ AI-powered element annotator for Vite - enables real-time collaboration between 
 │  (Toolbar UI)   │                    │  Server (:7318)  │
 └─────────────────┘                    └────────┬─────────┘
                                                 │
-                                           MCP Protocol
+                                           MCP (stdio)
                                                 │
                                        ┌────────▼─────────┐
                                        │   Claude Code    │
@@ -41,31 +41,40 @@ import annotator from 'vite-plugin-ai-annotator'
 export default defineConfig({
   plugins: [
     annotator({
-      port: 7318,           // Default port
-      verbose: false,       // Enable for debugging
+      port: 7318,              // Default port
+      listenAddress: 'localhost', // Default bind address
+      injectSourceLoc: true,   // Inject data-source-loc attributes (default: true)
+      verbose: false,          // Enable for debugging
     }),
   ],
 })
 ```
 
-**Team Collaboration (optional):** For network access, add:
+**Team Collaboration (optional):** For network access:
 ```typescript
 annotator({
   port: 7318,
-  listenAddress: '0.0.0.0',                // Accept connections from network
-  publicAddress: 'https://myapp.com:7318', // Public URL for the toolbar
+  listenAddress: '0.0.0.0',
+  publicAddress: 'https://myapp.com:7318',
 })
 ```
 
 ### 3. Configure MCP Server
 
-Add to Claude Code settings (`~/.claude/settings.json`):
+Run in Claude Code:
+
+```bash
+claude mcp add annotator -- bunx vite-plugin-ai-annotator mcp -s http://localhost:7318
+```
+
+Or add to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "instantcode": {
-      "url": "http://localhost:7318/mcp"
+    "annotator": {
+      "command": "bunx",
+      "args": ["vite-plugin-ai-annotator", "mcp", "-s", "http://localhost:7318"]
     }
   }
 }
@@ -87,10 +96,11 @@ The annotator toolbar appears in the bottom-right corner of your app.
 List all connected browser sessions.
 
 ```
-Use: When multiple browser tabs are connected and you need to see which sessions are available.
+Parameters: (none)
+Returns: Array of BrowserSession objects
 ```
 
-Note: The MCP server is **stateless** - there's no "active session" concept. Each tool accepts an optional `sessionId` parameter. If only one browser session is connected, it auto-selects. If multiple sessions exist, you must pass `sessionId` to each tool call.
+Note: The MCP server is **stateless**. Each tool accepts an optional `sessionId` parameter. If only one browser session is connected, it auto-selects. If multiple sessions exist, you must pass `sessionId` to each tool call.
 
 ### Page Context
 
@@ -106,13 +116,11 @@ Returns:
 - title: Page title
 - selectionCount: Number of selected elements
 - isInspecting: Whether inspect mode is active
-
-Use: Before selecting elements, to understand current page state.
 ```
 
-### Element Selection
+### Element Feedback
 
-**annotator_select_element**
+**annotator_select_feedback**
 Enter inspect mode or select elements by selector.
 
 ```
@@ -126,29 +134,34 @@ Examples:
 - Inspect mode: { mode: 'inspect' }
 - CSS selector: { mode: 'selector', selector: '.btn-primary' }
 - XPath: { mode: 'selector', selector: '//button[@type="submit"]', selectorType: 'xpath' }
+
+Returns:
+- success: boolean
+- count: number (elements selected)
+- error?: string
 ```
 
-**annotator_get_selected_elements**
+**annotator_get_feedback**
 Get detailed data about selected elements.
 
 ```
 Parameters:
 - sessionId: (optional) Browser session ID
+- fields: (optional) array of ['xpath', 'attributes', 'styles', 'children']
 
-Returns array of ElementData:
-- index: Selection order
-- tagName: HTML tag
+Default fields (always returned):
+- index, tagName, cssSelector, textContent, comment, componentData
+
+Additional fields (when requested):
 - xpath: Full XPath
-- cssSelector: CSS selector
-- textContent: Element text
-- attributes: All attributes
-- comment: User annotation (if any)
-- computedStyles: Width, height, colors, fonts
-- componentData: Framework component info (Vue, React, etc.)
+- attributes: All HTML attributes
+- computedStyles: width, height, fontSize, colors, etc.
 - children: Nested selected elements
+
+Returns: Array of ElementData objects
 ```
 
-**annotator_clear_selection**
+**annotator_clear_feedback**
 Clear all selected elements.
 
 ```
@@ -166,10 +179,9 @@ Parameters:
 - sessionId: (optional) Browser session ID
 - type: 'viewport' | 'element' (default: 'viewport')
 - selector: CSS selector (required when type is 'element')
-- format: 'png' | 'jpeg' (default: 'png')
-- quality: 0-1 (default: 0.8)
+- quality: 0-1 (default: 0.7)
 
-Returns: File path to saved screenshot
+Returns: File path to saved WebP screenshot
 ```
 
 ### Code Injection
@@ -181,8 +193,6 @@ Inject CSS styles into the page.
 Parameters:
 - sessionId: (optional) Browser session ID
 - css: CSS code to inject
-
-Use: Testing style changes, debugging layout issues.
 ```
 
 **annotator_inject_js**
@@ -193,9 +203,10 @@ Parameters:
 - sessionId: (optional) Browser session ID
 - code: JavaScript code to execute
 
-Returns: Execution result or error
-
-Use: Testing interactions, reading page state, debugging.
+Returns:
+- success: boolean
+- result?: unknown (execution result)
+- error?: string
 ```
 
 ### Console
@@ -216,22 +227,22 @@ Returns: Array of console entries with type, args, timestamp.
 ### Workflow 1: Understand Page Structure
 
 1. Check page context: `annotator_get_page_context`
-2. Enter inspect mode: `annotator_select_element({ mode: 'inspect' })`
+2. Enter inspect mode: `annotator_select_feedback({ mode: 'inspect' })`
 3. Ask user to click elements they want to discuss
-4. Get selected elements: `annotator_get_selected_elements`
+4. Get selected elements: `annotator_get_feedback`
 5. Analyze structure and provide recommendations
 
 ### Workflow 2: Debug Styling Issues
 
-1. Select problematic element: `annotator_select_element({ mode: 'selector', selector: '.problem-element' })`
-2. Get element details including computedStyles
+1. Select problematic element: `annotator_select_feedback({ mode: 'selector', selector: '.problem-element' })`
+2. Get element details: `annotator_get_feedback({ fields: ['styles', 'attributes'] })`
 3. Inject test CSS: `annotator_inject_css('...')`
 4. Capture screenshot to verify: `annotator_capture_screenshot({ type: 'element', selector: '.problem-element' })`
 
 ### Workflow 3: Implement User Feedback
 
 1. User selects elements and adds comments via toolbar
-2. Get selections with comments: `annotator_get_selected_elements`
+2. Get selections with comments: `annotator_get_feedback`
 3. Read component files based on `componentData.componentLocation`
 4. Make code changes based on user comments
 5. User verifies changes in browser
@@ -242,12 +253,17 @@ Returns: Array of console entries with type, args, timestamp.
 interface ElementData {
   index: number
   tagName: string
-  xpath: string
   cssSelector: string
   textContent: string
-  attributes: Record<string, string>
-  imagePath?: string  // Screenshot path if captured
-  comment?: string  // User annotation
+  comment?: string
+  componentData?: {
+    componentLocation: string  // File path with line number
+    componentName?: string
+    framework?: 'vue' | 'react' | 'angular' | 'svelte' | 'vanilla'
+  }
+  // Optional fields (request via fields parameter):
+  xpath?: string
+  attributes?: Record<string, string>
   computedStyles?: {
     width: number
     height: number
@@ -258,12 +274,7 @@ interface ElementData {
     display?: string
     position?: string
   }
-  componentData?: {
-    componentLocation: string  // File path
-    componentName?: string
-    framework?: 'vue' | 'react' | 'angular' | 'svelte' | 'vanilla'
-  }
-  children: ElementData[]
+  children?: ElementData[]
 }
 ```
 
@@ -272,6 +283,7 @@ interface ElementData {
 - Always call `annotator_get_page_context` first to verify connection
 - Use inspect mode for user-driven selection, CSS/XPath for programmatic selection
 - Element comments from users provide valuable context for code changes
-- `componentData.componentLocation` points directly to the source file
-- Screenshots are saved to temp directory and path is returned
+- `componentData.componentLocation` points directly to the source file with line number
+- Screenshots are saved as WebP to temp directory
 - Console logs are buffered; use `clear: true` to prevent duplicates
+- The plugin is disabled during `vite build` - safe for production configs
