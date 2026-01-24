@@ -1,4 +1,9 @@
-# Claude Annotator Plugin
+> [!CAUTION]
+> **This repository has been archived and is no longer maintained.**
+>
+> Please use the new repository: **[vite-plugin-ai-annotator](https://github.com/nguyenvanduocit/vite-plugin-ai-annotator)**
+
+# Claude Annotator Plugin (Archived)
 
 Claude Code plugin for [vite-plugin-ai-annotator](https://www.npmjs.com/package/vite-plugin-ai-annotator) - enables AI-human collaboration through visual element selection and annotation.
 
