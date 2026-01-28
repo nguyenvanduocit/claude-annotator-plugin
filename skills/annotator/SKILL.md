@@ -67,12 +67,12 @@ Run in Claude Code:
 claude mcp add annotator -- bunx vite-plugin-ai-annotator mcp -s http://localhost:7318
 ```
 
-Or add to `~/.claude/settings.json`:
+Or add to `.mcp.json` in your project root (or `~/.claude/settings.json` for global):
 
 ```json
 {
   "mcpServers": {
-    "annotator": {
+    "ai-annotator": {
       "command": "bunx",
       "args": ["vite-plugin-ai-annotator", "mcp", "-s", "http://localhost:7318"]
     }
