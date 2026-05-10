@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ai-annotator": {
+      "command": "bun",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/channel.ts"]
+    }
+  }
+}

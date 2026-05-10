@@ -10,3 +10,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Channel plugin runtime
+node_modules/
+bun.lockb

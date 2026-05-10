@@ -1,253 +1,83 @@
 ---
 name: annotator
-description: Guide for using vite-plugin-ai-annotator to enable AI-human collaboration through visual element selection. Use when user mentions "annotator", "ai-annotator", "vite-plugin-ai-annotator", "select elements", "browser selection", "capture screenshot from browser", "inject CSS/JS", or needs to work with web elements visually.
+description: Use when the user mentions "annotator", "ai-annotator", "vite-plugin-ai-annotator", "browser feedback", "select elements in browser", "capture screenshot from browser", "inject CSS/JS", or wants to act on UI feedback that arrived as a `<channel source="ai-annotator">` event. Provides REST API + channel event reference for the live browser session.
 ---
 
 # vite-plugin-ai-annotator
 
-AI-powered element annotator for Vite - enables real-time collaboration between AI and humans through visual element selection, annotation, and manipulation in the browser.
+`vite-plugin-ai-annotator` injects an annotation toolbar into the browser. The user picks UI elements, attaches comments, then either copies a prompt to clipboard or — when the channel plugin is enabled — pushes a `<channel source="ai-annotator">` event straight into your running Claude Code session.
+
+You interact with the live browser session through a **REST API** on `http://localhost:7318` (default). The MCP `annotator_*` tools that earlier versions exposed are gone — use the REST API.
 
 ## Architecture
 
 ```
-┌─────────────────┐     WebSocket      ┌──────────────────┐
-│  Browser Page   │◄──────────────────►│  Annotator       │
-│  (Toolbar UI)   │                    │  Server (:7318)  │
-└─────────────────┘                    └────────┬─────────┘
-                                                │
-                                           MCP (stdio)
-                                                │
-                                       ┌────────▼─────────┐
-                                       │   Claude Code    │
-                                       │   (MCP Client)   │
-                                       └──────────────────┘
+┌─────────────────┐    Socket.IO      ┌──────────────────┐
+│  Browser Page   │◄─────────────────►│  ws-server       │
+│  (toolbar UI)   │                   │  (Express, :7318)│
+└─────────────────┘                   └────────┬─────────┘
+                                               │ REST /api/*
+                                               │
+                                               │ Socket.IO room "channels"
+                                               │
+                                      ┌────────▼─────────────┐
+                                      │  channel.ts (this    │
+                                      │  plugin's MCP server)│
+                                      └────────┬─────────────┘
+                                               │ stdio (claude/channel)
+                                      ┌────────▼─────────┐
+                                      │   Claude Code    │
+                                      │   session        │
+                                      └──────────────────┘
 ```
 
-## Setup
+## Channel push event
 
-### 1. Install vite-plugin-ai-annotator
-
-```bash
-bun add -d vite-plugin-ai-annotator
-```
-
-### 2. Add Vite Plugin
-
-```typescript
-// vite.config.ts
-import { defineConfig } from 'vite'
-import annotator from 'vite-plugin-ai-annotator'
-
-export default defineConfig({
-  plugins: [
-    annotator({
-      port: 7318,              // Default port
-      listenAddress: 'localhost', // Default bind address
-      injectSourceLoc: true,   // Inject data-source-loc attributes (default: true)
-      verbose: false,          // Enable for debugging
-    }),
-  ],
-})
-```
-
-**Team Collaboration (optional):** For network access:
-```typescript
-annotator({
-  port: 7318,
-  listenAddress: '0.0.0.0',
-  publicAddress: 'https://myapp.com:7318',
-})
-```
-
-### 3. Configure MCP Server
-
-Run in Claude Code:
-
-```bash
-claude mcp add annotator -- bunx vite-plugin-ai-annotator mcp -s http://localhost:7318
-```
-
-Or add to `.mcp.json` in your project root (or `~/.claude/settings.json` for global):
-
-```json
-{
-  "mcpServers": {
-    "ai-annotator": {
-      "command": "bunx",
-      "args": ["vite-plugin-ai-annotator", "mcp", "-s", "http://localhost:7318"]
-    }
-  }
-}
-```
-
-### 4. Start Development Server
-
-```bash
-bun dev
-```
-
-The annotator toolbar appears in the bottom-right corner of your app.
-
-## MCP Tools
-
-### Session Management
-
-**annotator_list_sessions**
-List all connected browser sessions.
+When the user clicks a "Send to Claude" button in the toolbar, the channel server pushes:
 
 ```
-Parameters: (none)
-Returns: Array of BrowserSession objects
+<channel source="ai-annotator" session_id="<uuid>" page_url="<url>" count="<N>">
+User submitted <N> feedback item(s) on <url> ("<title>"). Fetch GET http://localhost:7318/api/sessions/<session_id>/feedback?fields=xpath,attributes for details, apply the changes the comments describe, then DELETE the same endpoint. Use notify_user(session_id="<session_id>", ...) to report progress.
+</channel>
 ```
 
-Note: The MCP server is **stateless**. Each tool accepts an optional `sessionId` parameter. If only one browser session is connected, it auto-selects. If multiple sessions exist, you must pass `sessionId` to each tool call.
+When you see this event:
 
-### Page Context
+1. Fetch full feedback: `GET /api/sessions/<session_id>/feedback?fields=xpath,attributes` (add `styles,children` if you need them)
+2. Each item carries `componentData.componentLocation` — file path with line number — open the file at that location
+3. Apply the changes the user's `comment` describes
+4. Call `notify_user` to surface progress in the browser toast
+5. `DELETE /api/sessions/<session_id>/feedback` after the change ships, so the same items don't fire next time
 
-**annotator_get_page_context**
-Get current page information.
+## REST API
 
-```
-Parameters:
-- sessionId: (optional) Browser session ID
+All endpoints under `/api/`. Default base URL: `http://localhost:7318` (override with the `AI_ANNOTATOR_PORT` or `INSPECTOR_PORT` env var).
 
-Returns:
-- url: Current page URL
-- title: Page title
-- selectionCount: Number of selected elements
-- isInspecting: Whether inspect mode is active
-```
+| Method | Endpoint | Body / Query | Returns |
+|--------|----------|--------------|---------|
+| `GET` | `/api/sessions` | — | Array of `BrowserSession` |
+| `GET` | `/api/sessions/:id/page-context` | — | `{url, title, selectionCount, isInspecting}` |
+| `POST` | `/api/sessions/:id/select` | `{mode?: 'inspect'\|'selector', selector?: string, selectorType?: 'css'\|'xpath'}` | `{success, count, error?}` |
+| `GET` | `/api/sessions/:id/feedback` | `?fields=xpath,attributes,styles,children` | Array of `ElementData` |
+| `DELETE` | `/api/sessions/:id/feedback` | — | `{success: true}` |
+| `POST` | `/api/sessions/:id/screenshot` | `{type?: 'viewport'\|'element', selector?, quality?}` | `{success, filePath}` (WebP saved to tmpdir) |
+| `POST` | `/api/sessions/:id/inject-css` | `{css: string}` | `{success, error?}` |
+| `POST` | `/api/sessions/:id/inject-js` | `{code: string}` | `{success, result?, error?}` |
+| `GET` | `/api/sessions/:id/console` | `?clear=true` | Array of `{type, args, timestamp}` |
 
-### Element Feedback
+**Session ID**: required in path. Use `GET /api/sessions` to discover. The channel event hands you `session_id` directly via `meta`.
 
-**annotator_select_feedback**
-Enter inspect mode or select elements by selector.
+## `notify_user` reply tool
 
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-- mode: 'inspect' | 'selector' (default: 'inspect')
-- selector: CSS or XPath selector (required when mode is 'selector')
-- selectorType: 'css' | 'xpath' (default: 'css')
-
-Examples:
-- Inspect mode: { mode: 'inspect' }
-- CSS selector: { mode: 'selector', selector: '.btn-primary' }
-- XPath: { mode: 'selector', selector: '//button[@type="submit"]', selectorType: 'xpath' }
-
-Returns:
-- success: boolean
-- count: number (elements selected)
-- error?: string
-```
-
-**annotator_get_feedback**
-Get detailed data about selected elements.
+Two-way channel exposes one MCP tool:
 
 ```
-Parameters:
-- sessionId: (optional) Browser session ID
-- fields: (optional) array of ['xpath', 'attributes', 'styles', 'children']
-
-Default fields (always returned):
-- index, tagName, cssSelector, textContent, comment, componentData
-
-Additional fields (when requested):
-- xpath: Full XPath
-- attributes: All HTML attributes
-- computedStyles: width, height, fontSize, colors, etc.
-- children: Nested selected elements
-
-Returns: Array of ElementData objects
+notify_user(session_id: string, message: string, status?: 'info' | 'progress' | 'done' | 'error')
 ```
 
-**annotator_clear_feedback**
-Clear all selected elements.
+The toolbar shows a toast prefixed by status icon (`✓` done, `✗` error, `…` progress). Call it to acknowledge receipt, report progress on long fixes, or signal completion. Pass `session_id` from the inbound channel tag verbatim.
 
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-```
-
-### Screenshots
-
-**annotator_capture_screenshot**
-Capture viewport or specific element.
-
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-- type: 'viewport' | 'element' (default: 'viewport')
-- selector: CSS selector (required when type is 'element')
-- quality: 0-1 (default: 0.7)
-
-Returns: File path to saved WebP screenshot
-```
-
-### Code Injection
-
-**annotator_inject_css**
-Inject CSS styles into the page.
-
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-- css: CSS code to inject
-```
-
-**annotator_inject_js**
-Execute JavaScript in page context.
-
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-- code: JavaScript code to execute
-
-Returns:
-- success: boolean
-- result?: unknown (execution result)
-- error?: string
-```
-
-### Console
-
-**annotator_get_console**
-Get captured console logs from the browser.
-
-```
-Parameters:
-- sessionId: (optional) Browser session ID
-- clear: boolean - Clear buffer after reading (default: false)
-
-Returns: Array of console entries with type, args, timestamp.
-```
-
-## Workflows
-
-### Workflow 1: Understand Page Structure
-
-1. Check page context: `annotator_get_page_context`
-2. Enter inspect mode: `annotator_select_feedback({ mode: 'inspect' })`
-3. Ask user to click elements they want to discuss
-4. Get selected elements: `annotator_get_feedback`
-5. Analyze structure and provide recommendations
-
-### Workflow 2: Debug Styling Issues
-
-1. Select problematic element: `annotator_select_feedback({ mode: 'selector', selector: '.problem-element' })`
-2. Get element details: `annotator_get_feedback({ fields: ['styles', 'attributes'] })`
-3. Inject test CSS: `annotator_inject_css('...')`
-4. Capture screenshot to verify: `annotator_capture_screenshot({ type: 'element', selector: '.problem-element' })`
-
-### Workflow 3: Implement User Feedback
-
-1. User selects elements and adds comments via toolbar
-2. Get selections with comments: `annotator_get_feedback`
-3. Read component files based on `componentData.componentLocation`
-4. Make code changes based on user comments
-5. User verifies changes in browser
-
-## Element Data Structure
+## ElementData shape
 
 ```typescript
 interface ElementData {
@@ -255,35 +85,81 @@ interface ElementData {
   tagName: string
   cssSelector: string
   textContent: string
-  comment?: string
+  selectedText?: string          // when user highlighted specific text
+  comment?: string               // user's annotation — the actionable instruction
   componentData?: {
-    componentLocation: string  // File path with line number
+    componentLocation: string    // "src/Foo.vue:42" — open this
     componentName?: string
     framework?: 'vue' | 'react' | 'angular' | 'svelte' | 'vanilla'
   }
-  // Optional fields (request via fields parameter):
+  // Returned only when requested via ?fields=...
   xpath?: string
   attributes?: Record<string, string>
-  computedStyles?: {
-    width: number
-    height: number
-    fontSize: string
-    fontFamily: string
-    color?: string
-    backgroundColor?: string
-    display?: string
-    position?: string
-  }
+  computedStyles?: { width, height, fontSize, fontFamily, color?, backgroundColor?, display?, position? }
   children?: ElementData[]
 }
 ```
 
+## Workflows
+
+### A — React to a channel push (channel mode)
+
+1. Channel event arrives → read `session_id`, `page_url`, `count` from tag attributes
+2. `GET /api/sessions/<session_id>/feedback?fields=xpath,attributes` → list of `ElementData`
+3. For each item: open file at `componentData.componentLocation`, apply change driven by `comment`
+4. `notify_user(session_id, "Applied 3 changes", status="done")`
+5. `DELETE /api/sessions/<session_id>/feedback`
+
+### B — Pull on demand (no channel; user pasted the copy-to-clipboard prompt)
+
+1. `GET /api/sessions` → list sessions
+2. `GET /api/sessions/<id>/feedback?fields=xpath,attributes` → details
+3. Apply changes
+4. `DELETE /api/sessions/<id>/feedback`
+
+### C — Programmatic element selection
+
+1. `POST /api/sessions/<id>/select` with `{mode: 'selector', selector: '.btn-primary'}` (CSS) or `{mode: 'selector', selector: '//button', selectorType: 'xpath'}`
+2. `GET /api/sessions/<id>/feedback?fields=styles,attributes` to inspect
+
+### D — Style debugging
+
+1. `POST /api/sessions/<id>/inject-css` with `{css: '.foo { color: red }'}` to test
+2. `POST /api/sessions/<id>/screenshot` with `{type: 'element', selector: '.foo'}` to verify visually
+
 ## Tips
 
-- Always call `annotator_get_page_context` first to verify connection
-- Use inspect mode for user-driven selection, CSS/XPath for programmatic selection
-- Element comments from users provide valuable context for code changes
-- `componentData.componentLocation` points directly to the source file with line number
-- Screenshots are saved as WebP to temp directory
-- Console logs are buffered; use `clear: true` to prevent duplicates
-- The plugin is disabled during `vite build` - safe for production configs
+- Always include `session_id` from the channel `meta` when calling REST. If multiple browsers connected and you call without it, you get an error listing available IDs.
+- `componentData.componentLocation` ends with `:line` — use it directly in `Read` tool (`Read("src/Foo.vue", offset: 42)`) instead of grep.
+- Console logs are buffered (max 1000, trimmed to 500). Use `?clear=true` after read to avoid duplicates next call.
+- Screenshot files are WebP at `$TMPDIR/ai-annotator-screenshots/screenshot-<ts>.webp`.
+- The vite plugin only runs during `vite serve`, never during `vite build` — no production overhead.
+
+## Setup (for the user, not for you)
+
+If the user is asking how to install:
+
+```bash
+bun add -d vite-plugin-ai-annotator
+```
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite'
+import annotator from 'vite-plugin-ai-annotator'
+
+export default defineConfig({
+  plugins: [annotator({ port: 7318 })],
+})
+```
+
+Then for the channel push experience:
+
+```bash
+/plugin marketplace add nguyenvanduocit/claude-annotator-plugin
+/plugin install claude-annotator-plugin@claude-annotator-plugin
+# Restart Claude Code with the channel flag (research preview)
+claude --dangerously-load-development-channels plugin:claude-annotator-plugin@claude-annotator-plugin
+```
+
+Channels require Claude Code v2.1.80+ and Anthropic auth (claude.ai or Console API key). Not available on Bedrock / Vertex / Foundry.

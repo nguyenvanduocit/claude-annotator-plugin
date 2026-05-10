@@ -1,0 +1,11 @@
+{
+  "name": "claude-annotator-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code channel plugin for vite-plugin-ai-annotator — pushes browser feedback events into the running session and relays toast notifications back",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "socket.io-client": "^4.7.0"
+  }
+}
