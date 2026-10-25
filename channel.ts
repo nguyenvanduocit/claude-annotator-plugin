@@ -96,17 +96,33 @@ interface FeedbackSubmittedPayload {
   pageUrl: string
   pageTitle: string
   count: number
+  elements?: Record<string, unknown>[]
 }
 
 socket.on('feedback:submitted', async (payload: FeedbackSubmittedPayload) => {
   const titleSuffix = payload.pageTitle ? ` ("${payload.pageTitle}")` : ''
+  const endpoint = `${SERVER_URL}/api/sessions/${payload.sessionId}/feedback`
+
+  // The ws-server ships the element data with the event, so the common path
+  // costs Claude no REST round-trip. A page running a cached older toolbar
+  // bundle sends none — fall back to the fetch instruction rather than claim
+  // there is nothing to act on.
+  const body = payload.elements?.length
+    ? `Element data (inline — no API call needed to read it):\n` +
+      '```json\n' +
+      `${JSON.stringify(payload.elements, null, 2)}\n` +
+      '```'
+    : `Fetch GET ${endpoint}?fields=xpath,attributes for details.`
+
   await mcp.notification({
     method: 'notifications/claude/channel',
     params: {
       content:
-        `User submitted ${payload.count} feedback item(s) on ${payload.pageUrl}${titleSuffix}. ` +
-        `Fetch GET ${SERVER_URL}/api/sessions/${payload.sessionId}/feedback?fields=xpath,attributes for details, ` +
-        `apply the changes the comments describe, then DELETE the same endpoint. ` +
+        `User submitted ${payload.count} feedback item(s) on ${payload.pageUrl}${titleSuffix}.\n` +
+        `${body}\n` +
+        `For each item: open the "file:line" path in componentData.componentLocation and apply the change its comment asks for. ` +
+        `imagePath is a screenshot of the element as the user sees it — open it to see the current UI before changing it. ` +
+        `Then clear the selection: DELETE ${endpoint} — the push cannot clear it, so skipping this replays the same items next time. ` +
         `Use notify_user(session_id="${payload.sessionId}", ...) to report progress.`,
       meta: {
         session_id: payload.sessionId,

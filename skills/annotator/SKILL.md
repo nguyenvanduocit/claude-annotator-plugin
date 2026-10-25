@@ -5,7 +5,7 @@ description: Use when the user mentions "annotator", "ai-annotator", "vite-plugi
 
 # vite-plugin-ai-annotator
 
-`vite-plugin-ai-annotator` injects an annotation toolbar into the browser. The user picks UI elements, attaches comments, then either copies a prompt to clipboard or — when the channel plugin is enabled — pushes a `<channel source="ai-annotator">` event straight into your running Claude Code session.
+`vite-plugin-ai-annotator` injects an annotation toolbar into the browser. The user picks UI elements, attaches comments, then either copies a prompt to clipboard or — when the channel plugin is enabled — pushes a `<channel source="ai-annotator">` event straight into your running Claude Code session. Both routes carry the element data inline, so you can act on the feedback without calling the API to read it.
 
 You interact with the live browser session through a **REST API** on `http://localhost:7318` (default). The MCP `annotator_*` tools that earlier versions exposed are gone — use the REST API.
 
@@ -33,25 +33,35 @@ You interact with the live browser session through a **REST API** on `http://loc
 
 ## Channel push event
 
-When the user clicks a "Send to Claude" button in the toolbar, the channel server pushes:
+When the user clicks a "Send to Claude" button in the toolbar, the channel server pushes the element data inline:
 
 ```
 <channel source="ai-annotator" session_id="<uuid>" page_url="<url>" count="<N>">
-User submitted <N> feedback item(s) on <url> ("<title>"). Fetch GET http://localhost:7318/api/sessions/<session_id>/feedback?fields=xpath,attributes for details, apply the changes the comments describe, then DELETE the same endpoint. Use notify_user(session_id="<session_id>", ...) to report progress.
+User submitted <N> feedback item(s) on <url> ("<title>").
+Element data (inline — no API call needed to read it):
+```json
+[{ "comment": "...", "selectedText": "...", "componentData": { "componentLocation": "src/Foo.vue:42" },
+   "imagePath": "/tmp/ai-annotator-screenshots/screenshot-....webp",
+   "cssSelector": "...", "xpath": "...", "attributes": { ... } }]
+```
+For each item: open the "file:line" path in componentData.componentLocation and apply the change its comment asks for. Then clear the selection: DELETE http://localhost:7318/api/sessions/<uuid>/feedback ...
 </channel>
 ```
 
 When you see this event:
 
-1. Fetch full feedback: `GET /api/sessions/<session_id>/feedback?fields=xpath,attributes` (add `styles,children` if you need them)
+1. Read the inline JSON straight from the event — don't re-fetch what you were handed
 2. Each item carries `componentData.componentLocation` — file path with line number — open the file at that location
-3. Apply the changes the user's `comment` describes
-4. Call `notify_user` to surface progress in the browser toast
-5. `DELETE /api/sessions/<session_id>/feedback` after the change ships, so the same items don't fire next time
+3. Each item carries `imagePath` — a WebP screenshot of the element as the user sees it. `Read` it to see the current UI
+4. Apply the changes the user's `comment` describes
+5. Call `notify_user` to surface progress in the browser toast
+6. `DELETE /api/sessions/<session_id>/feedback` after the change ships — the push can't clear the browser's selection, so skipping this replays the same items next time
+
+`styles` and `children` are excluded from the push to keep it small; `GET /api/sessions/<session_id>/feedback?fields=styles,children` when you need them. A page running a cached older toolbar bundle pushes no inline data — that event says `Fetch GET ...` instead, so follow it.
 
 ## REST API
 
-All endpoints under `/api/`. Default base URL: `http://localhost:7318` (override with the `AI_ANNOTATOR_PORT` or `INSPECTOR_PORT` env var).
+All endpoints under `/api/`. Default base URL: `http://localhost:7318`. The server's port comes from the vite plugin's `port` option, or from `--port` / `INSPECTOR_PORT` / `PORT` when it runs standalone. `AI_ANNOTATOR_PORT` tells the *clients* (the channel server, the prompt hook) which port to reach it on — set it to match whenever the server isn't on 7318.
 
 | Method | Endpoint | Body / Query | Returns |
 |--------|----------|--------------|---------|
@@ -87,6 +97,7 @@ interface ElementData {
   textContent: string
   selectedText?: string          // when user highlighted specific text
   comment?: string               // user's annotation — the actionable instruction
+  imagePath?: string             // WebP screenshot of the element — Read it to see the UI; absent only if capture failed
   componentData?: {
     componentLocation: string    // "src/Foo.vue:42" — open this
     componentName?: string
@@ -104,18 +115,18 @@ interface ElementData {
 
 ### A — React to a channel push (channel mode)
 
-1. Channel event arrives → read `session_id`, `page_url`, `count` from tag attributes
-2. `GET /api/sessions/<session_id>/feedback?fields=xpath,attributes` → list of `ElementData`
-3. For each item: open file at `componentData.componentLocation`, apply change driven by `comment`
-4. `notify_user(session_id, "Applied 3 changes", status="done")`
-5. `DELETE /api/sessions/<session_id>/feedback`
+1. Channel event arrives → read `session_id` from the tag attributes and the element data from the inline JSON
+2. For each item: `Read` the `imagePath` screenshot, open file at `componentData.componentLocation`, apply change driven by `comment`
+3. `notify_user(session_id, "Applied 3 changes", status="done")`
+4. `DELETE /api/sessions/<session_id>/feedback`
 
-### B — Pull on demand (no channel; user pasted the copy-to-clipboard prompt)
+### B — User pasted the copy-to-clipboard prompt (no channel)
 
-1. `GET /api/sessions` → list sessions
-2. `GET /api/sessions/<id>/feedback?fields=xpath,attributes` → details
-3. Apply changes
-4. `DELETE /api/sessions/<id>/feedback`
+The paste already carries the element data as inline JSON — `comment`, `selectedText`, `imagePath`, `cssSelector`, `xpath`, `attributes`, `componentData`. Read it from the message; don't re-fetch what you were handed.
+
+1. For each item: `Read` the `imagePath` screenshot, open `componentData.componentLocation` and apply the change its `comment` describes
+2. `DELETE /api/sessions/<id>/feedback` — the paste can't clear the browser's selection, so this step still matters or the items resurface on the next copy
+3. Only if you need computed styles or child elements: `GET /api/sessions/<id>/feedback?fields=styles,children` (both are excluded from the paste to keep it small)
 
 ### C — Programmatic element selection
 
